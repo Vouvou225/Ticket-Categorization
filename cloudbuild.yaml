@@ -1,0 +1,50 @@
+# Cloud Build pipeline: build the image, push to Artifact Registry, deploy to
+# Cloud Run. Trigger from GitHub or run manually:
+#
+#   gcloud builds submit --config cloudbuild.yaml \
+#     --substitutions=_REGION=us-central1,_SERVICE=ticket-router
+#
+# Store the ServiceNow password and webhook token in Secret Manager and bind
+# them at deploy time with --set-secrets (see below).
+
+substitutions:
+  _REGION: us-central1
+  _SERVICE: ticket-router
+  _REPO: containers
+  _SN_INSTANCE: dev12345
+  _SN_USER: integration.user
+
+steps:
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA
+      - .
+
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA
+
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA
+      - --region=${_REGION}
+      - --no-allow-unauthenticated
+      - --set-env-vars=ENVIRONMENT=production,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,GOOGLE_CLOUD_LOCATION=${_REGION}
+      - --set-env-vars=SERVICENOW_INSTANCE=${_SN_INSTANCE},SERVICENOW_USER=${_SN_USER}
+      - --set-secrets=SERVICENOW_PASSWORD=servicenow-password:latest,WEBHOOK_TOKEN=router-webhook-token:latest
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA
+
+options:
+  logging: CLOUD_LOGGING_ONLY

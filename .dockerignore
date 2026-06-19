@@ -1,0 +1,14 @@
+.git
+.github
+.vscode
+tests
+scripts
+*.md
+.env
+.env.*
+__pycache__
+*.pyc
+.pytest_cache
+.mypy_cache
+.ruff_cache
+*.ipynb
